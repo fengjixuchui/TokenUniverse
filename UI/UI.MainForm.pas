@@ -67,6 +67,7 @@ type
     cmAllocConsole: TMenuItem;
     N7: TMenuItem;
     cmAccess: TMenuItem;
+    MenuSecurePrompt: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure ActionDuplicate(Sender: TObject);
     procedure ActionClose(Sender: TObject);
@@ -110,6 +111,7 @@ type
       var AskParent: Boolean; var PopupMenu: TPopupMenu);
     procedure cmAllocConsoleClick(Sender: TObject);
     procedure cmAccessClick(Sender: TObject);
+    procedure MenuSecurePromptClick(Sender: TObject);
   end;
 
 var
@@ -321,7 +323,7 @@ end;
 
 procedure TFormMain.cmAccessClick(Sender: TObject);
 begin
-  TAccessCheckForm.Create(Self).Show;
+  TAccessCheckForm.CreateChild(Self, cfmDesktop).Show;
 end;
 
 procedure TFormMain.cmAllocConsoleClick(Sender: TObject);
@@ -361,6 +363,7 @@ end;
 procedure TFormMain.FormCreate;
 var
   Token: IToken;
+  TokenType: TObjectTypeInfo;
   Elevation: TTokenElevationInfo;
   Handles: TArray<TProcessHandleEntry>;
   Linked: IToken;
@@ -370,14 +373,16 @@ begin
   CurrentUserChanged(Self);
 
   // Search for inherited handles
-  if NtxEnumerateHandlesProcess(NtCurrentProcess, Handles).IsSuccess then
+  if RtlxFindKernelType('Token', TokenType).IsSuccess and
+    NtxEnumerateHandlesProcess(NtCurrentProcess, Handles).IsSuccess then
   begin
-    // TODO: obtain token's type index in runtime
-    TArray.FilterInline<TProcessHandleEntry>(Handles, ByType(5));
+    TArray.FilterInline<TProcessHandleEntry>(Handles,
+      ByType(TokenType.Other.TypeIndex));
 
     for i := 0 to High(Handles) do
-      TokenView.Add(CaptureTokenHandle(Auto.CaptureHandle(Handle),
-        Format('Inherited %d [0x%x]', [Handle, Handle])));
+      TokenView.Add(CaptureTokenHandle(Auto.CaptureHandle(
+        Handles[i].HandleValue), Format('Inherited %d [0x%x]',
+        [Handles[i].HandleValue, Handles[i].HandleValue])));
   end;
 
   MakeOpenProcessToken(Token, nil, NtCurrentProcessId).RaiseOnError;
@@ -469,6 +474,12 @@ procedure TFormMain.MenuSafeImpersonationClick;
 begin
   TSettings.UseSafeImpersonation := not TSettings.UseSafeImpersonation;
   MenuSafeImpersonation.Checked := TSettings.UseSafeImpersonation;
+end;
+
+procedure TFormMain.MenuSecurePromptClick(Sender: TObject);
+begin
+  TSettings.PromtOnSecureDesktop := not TSettings.PromtOnSecureDesktop ;
+  MenuSecurePrompt.Checked := TSettings.PromtOnSecureDesktop;
 end;
 
 procedure TFormMain.MenuSystemAuditClick;
